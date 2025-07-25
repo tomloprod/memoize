@@ -14,8 +14,7 @@
         }
     ],
     "require": {
-        "php": "^8.2.0",
-        "ext-mbstring": "*"
+        "php": "^8.2.0"
     },
     "require-dev": {
         "laravel/pint": "^1.22.1",
