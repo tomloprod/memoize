@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Tomloprod\Memoize\Services\MemoEntry;
 use Tomloprod\Memoize\Services\MemoizeManager;
 
 beforeEach(function (): void {
@@ -154,14 +155,14 @@ test('flush clears all memoized values', function (): void {
     expect($manager->has('key1'))->toBe(true);
     expect($manager->has('key2'))->toBe(true);
     expect($manager->has('key3'))->toBe(true);
-    expect($manager->keys())->toHaveCount(3);
+    expect($manager->getMemoizedValues())->toHaveCount(3);
 
     $manager->flush();
 
     expect($manager->has('key1'))->toBe(false);
     expect($manager->has('key2'))->toBe(false);
     expect($manager->has('key3'))->toBe(false);
-    expect($manager->keys())->toHaveCount(0);
+    expect($manager->getMemoizedValues())->toHaveCount(0);
 });
 
 test('has correctly checks for key existence', function (): void {
@@ -176,25 +177,57 @@ test('has correctly checks for key existence', function (): void {
     expect($manager->has('test_key'))->toBe(false);
 });
 
-test('keys returns all cached keys', function (): void {
+test('getMemoizedValues can be used to get keys', function (): void {
     $manager = MemoizeManager::instance();
 
-    expect($manager->keys())->toBe([]);
+    expect($manager->getMemoizedValues())->toBe([]);
 
     $manager->memo('users', fn (): array => ['user1', 'user2']);
     $manager->memo('config', fn (): array => ['setting' => 'value']);
     $manager->memo('stats', fn (): array => ['count' => 100]);
 
-    $keys = $manager->keys();
+    $entries = $manager->getMemoizedValues();
+    $keys = array_keys($entries);
     expect($keys)->toHaveCount(3);
     expect($keys)->toContain('users');
     expect($keys)->toContain('config');
     expect($keys)->toContain('stats');
 
     $manager->forget('config');
-    $keys = $manager->keys();
+    $entries = $manager->getMemoizedValues();
+    $keys = array_keys($entries);
     expect($keys)->toHaveCount(2);
     expect($keys)->not()->toContain('config');
+});
+
+test('getMemoizedValues returns all cached entries with full information', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    expect($manager->getMemoizedValues())->toBe([]);
+
+    $manager->memo('users', fn (): array => ['user1', 'user2']);
+    $manager->memo('config', fn (): array => ['setting1' => 'value1']);
+    $manager->for('App\\Models\\User')->memo('profile', fn (): string => 'user_profile');
+
+    $entries = $manager->getMemoizedValues();
+    expect($entries)->toHaveCount(3);
+
+    expect($entries)->toHaveKey('users');
+    expect($entries)->toHaveKey('config');
+    expect($entries)->toHaveKey('App\\Models\\User::profile');
+
+    expect($entries['users'])->toBeInstanceOf(MemoEntry::class);
+    expect($entries['config'])->toBeInstanceOf(MemoEntry::class);
+    expect($entries['App\\Models\\User::profile'])->toBeInstanceOf(MemoEntry::class);
+
+    expect($entries['users']->getValue())->toBe(['user1', 'user2']);
+    expect($entries['users']->getHits())->toBe(1);
+    expect($entries['users']->getLastAccess())->toBeGreaterThan(0);
+    expect($entries['users']->getNamespace())->toBeNull();
+
+    expect($entries['App\\Models\\User::profile']->getValue())->toBe('user_profile');
+    expect($entries['App\\Models\\User::profile']->getNamespace())->toBe('App\\Models\\User');
 });
 
 test('memo cache operations work together', function (): void {
@@ -225,7 +258,7 @@ test('memo cache operations work together', function (): void {
 
     $manager->flush();
     expect($manager->has('test_key'))->toBe(false);
-    expect($manager->keys())->toHaveCount(0);
+    expect($manager->getMemoizedValues())->toHaveCount(0);
 });
 
 test('once executes callback only on first call', function (): void {
@@ -428,4 +461,317 @@ test('once functions maintain scope isolation', function (): void {
     expect($counter2())->toBe('counter2_1');
 
     expect($counter1())->not()->toBe($counter2());
+});
+
+test('setMaxSize and getMaxSize work correctly', function (): void {
+    $manager = MemoizeManager::instance();
+
+    expect($manager->getMaxSize())->toBeNull();
+
+    $manager->setMaxSize(3);
+    expect($manager->getMaxSize())->toBe(3);
+
+    $manager->setMaxSize(null);
+    expect($manager->getMaxSize())->toBeNull();
+
+    $manager->setMaxSize(1);
+    expect($manager->getMaxSize())->toBe(1);
+});
+
+test('LRU eviction works correctly', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->setMaxSize(2);
+
+    $manager->memo('key1', fn (): string => 'value1');
+    $manager->memo('key2', fn (): string => 'value2');
+
+    expect($manager->has('key1'))->toBe(true);
+    expect($manager->has('key2'))->toBe(true);
+    expect(count($manager->getMemoizedValues()))->toBe(2);
+
+    $manager->memo('key3', fn (): string => 'value3');
+
+    expect($manager->has('key1'))->toBe(false);
+    expect($manager->has('key2'))->toBe(true);
+    expect($manager->has('key3'))->toBe(true);
+    expect(count($manager->getMemoizedValues()))->toBe(2);
+});
+
+test('LRU respects access order', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->setMaxSize(2);
+
+    $manager->memo('key1', fn (): string => 'value1');
+    $manager->memo('key2', fn (): string => 'value2');
+
+    $manager->memo('key1', fn (): string => 'different_value');
+
+    $manager->memo('key3', fn (): string => 'value3');
+
+    expect($manager->has('key1'))->toBe(true);
+    expect($manager->has('key2'))->toBe(false);
+    expect($manager->has('key3'))->toBe(true);
+});
+
+test('setMaxSize enforces LRU immediately', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->setMaxSize(null);
+
+    $manager->memo('key1', fn (): string => 'value1');
+    $manager->memo('key2', fn (): string => 'value2');
+    $manager->memo('key3', fn (): string => 'value3');
+    $manager->memo('key4', fn (): string => 'value4');
+
+    expect(count($manager->getMemoizedValues()))->toBe(4);
+
+    $manager->setMaxSize(2);
+
+    expect(count($manager->getMemoizedValues()))->toBe(2);
+
+    expect($manager->has('key1'))->toBe(false);
+    expect($manager->has('key2'))->toBe(false);
+    expect($manager->has('key3'))->toBe(true);
+    expect($manager->has('key4'))->toBe(true);
+});
+
+test('getStats returns correct information', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->setMaxSize(null);
+
+    $stats = $manager->getStats();
+    expect($stats['size'])->toBe(0);
+    expect($stats['maxSize'])->toBeNull();
+    expect($stats['head']['key'])->toBeNull();
+    expect($stats['head']['time'])->toBeNull();
+    expect($stats['head']['hits'])->toBe(0);
+    expect($stats['tail']['key'])->toBeNull();
+    expect($stats['tail']['time'])->toBeNull();
+    expect($stats['tail']['hits'])->toBe(0);
+
+    $manager->setMaxSize(5);
+
+    $manager->memo('first_key', fn (): string => 'first_value');
+
+    $stats = $manager->getStats();
+    expect($stats['size'])->toBe(1);
+    expect($stats['maxSize'])->toBe(5);
+    expect($stats['head']['key'])->toBe('first_key');
+    expect($stats['head']['hits'])->toBe(1);
+    expect($stats['tail']['key'])->toBe('first_key');
+    expect($stats['tail']['hits'])->toBe(1);
+
+    $manager->memo('second_key', fn (): string => 'second_value');
+    $manager->memo('third_key', fn (): string => 'third_value');
+
+    $stats = $manager->getStats();
+    expect($stats['size'])->toBe(3);
+    expect($stats['head']['key'])->toBe('third_key');
+    expect($stats['tail']['key'])->toBe('first_key');
+
+    $manager->memo('first_key', fn (): string => 'different_value');
+
+    $stats = $manager->getStats();
+    expect($stats['head']['key'])->toBe('first_key');
+    expect($stats['head']['hits'])->toBe(2);
+    expect($stats['tail']['key'])->toBe('second_key');
+});
+
+test('getStats handles null maxSize correctly', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->setMaxSize(null);
+
+    $manager->memo('key1', fn (): string => 'value1');
+    $manager->memo('key2', fn (): string => 'value2');
+
+    $stats = $manager->getStats();
+    expect($stats['maxSize'])->toBeNull();
+    expect($stats['size'])->toBe(2);
+});
+
+test('LRU works with single entry', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->setMaxSize(1);
+
+    $manager->memo('key1', fn (): string => 'value1');
+    expect($manager->has('key1'))->toBe(true);
+
+    $manager->memo('key2', fn (): string => 'value2');
+    expect($manager->has('key1'))->toBe(false);
+    expect($manager->has('key2'))->toBe(true);
+    expect(count($manager->getMemoizedValues()))->toBe(1);
+});
+
+test('removeTail handles null tail directly', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $reflection = new ReflectionClass($manager);
+    $removeTailMethod = $reflection->getMethod('removeTail');
+    $removeTailMethod->setAccessible(true);
+
+    $removeTailMethod->invoke($manager);
+
+    expect($manager->getMemoizedValues())->toHaveCount(0);
+});
+
+test('LRU handles cache when head and tail are same entry', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->setMaxSize(1);
+
+    $manager->memo('single_key', fn (): string => 'single_value');
+
+    $stats = $manager->getStats();
+    expect($stats['head']['key'])->toBe('single_key');
+    expect($stats['tail']['key'])->toBe('single_key');
+
+    $manager->memo('single_key', fn (): string => 'different_value');
+
+    expect($manager->getMemoizedValues())->toHaveCount(1);
+});
+
+test('enforce LRU with no limit returns early', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->setMaxSize(null);
+
+    $manager->memo('key1', fn (): string => 'value1');
+    $manager->memo('key2', fn (): string => 'value2');
+    $manager->memo('key3', fn (): string => 'value3');
+
+    expect($manager->getMemoizedValues())->toHaveCount(3);
+
+    $manager->setMaxSize(3);
+    expect($manager->getMemoizedValues())->toHaveCount(3);
+
+    $manager->setMaxSize(5);
+    expect($manager->getMemoizedValues())->toHaveCount(3);
+});
+
+test('for method returns fluent interface', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $result = $manager->for('App\\Models\\User');
+    expect($result)->toBe($manager);
+});
+
+test('memo with namespace creates namespaced keys', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $manager->memo('user_123', fn (): string => 'without_namespace');
+
+    $manager->for('App\\Models\\User');
+    $manager->memo('user_123', fn (): string => 'with_namespace');
+
+    expect($manager->getMemoizedValues())->toHaveCount(2);
+    expect($manager->getMemoizedValues())->toHaveKey('user_123');
+    expect($manager->getMemoizedValues())->toHaveKey('App\\Models\\User::user_123');
+});
+
+test('memo returns different values for same key with different namespaces', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $value1 = $manager->memo('data', fn (): string => 'no_namespace');
+
+    $manager->for('App\\Models\\User');
+    $value2 = $manager->memo('data', fn (): string => 'user_namespace');
+
+    $manager->for('App\\Models\\Product');
+    $value3 = $manager->memo('data', fn (): string => 'product_namespace');
+
+    expect($value1)->toBe('no_namespace');
+    expect($value2)->toBe('user_namespace');
+    expect($value3)->toBe('product_namespace');
+    expect($manager->getMemoizedValues())->toHaveCount(3);
+});
+
+test('memo with null key and namespace returns null without executing callback', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $callbackExecuted = false;
+    $callback = function () use (&$callbackExecuted): string {
+        $callbackExecuted = true;
+
+        return 'should_not_execute';
+    };
+
+    $manager->for('App\\Models\\User');
+    $result = $manager->memo(null, $callback);
+
+    expect($result)->toBeNull();
+    expect($callbackExecuted)->toBe(false);
+    expect($manager->getMemoizedValues())->toHaveCount(0);
+});
+
+test('memo with null key and no namespace throws exception', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $callback = fn (): string => 'test';
+
+    expect(fn (): mixed => $manager->memo(null, $callback))
+        ->toThrow(InvalidArgumentException::class, 'Key cannot be null when no namespace is set');
+});
+
+test('has method works with namespace', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $manager->memo('test', fn (): string => 'no_namespace');
+    $manager->for('App\\Models\\User');
+    $manager->memo('test', fn (): string => 'with_namespace');
+
+    expect($manager->has('test'))->toBe(true);
+
+    $manager->for('App\\Models\\User');
+    expect($manager->has('test'))->toBe(true);
+
+    $manager->for('App\\Models\\Product');
+    expect($manager->has('test'))->toBe(false);
+});
+
+test('forget method works with namespace', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $manager->memo('test', fn (): string => 'no_namespace');
+    $manager->for('App\\Models\\User');
+    $manager->memo('test', fn (): string => 'with_namespace');
+
+    expect($manager->getMemoizedValues())->toHaveCount(2);
+
+    $manager->for('App\\Models\\User');
+    $result = $manager->forget('test');
+    expect($result)->toBe(true);
+    expect($manager->getMemoizedValues())->toHaveCount(1);
+
+    expect($manager->has('test'))->toBe(true);
+});
+
+test('flush clears all data', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $manager->for('App\\Models\\User')->memo('test', fn (): string => 'data');
+    expect($manager->getMemoizedValues())->toHaveCount(1);
+
+    $manager->flush();
+    expect($manager->getMemoizedValues())->toHaveCount(0);
+});
+
+test('each operation requires explicit namespace', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $manager->for('App\\Models\\User')->memo('key1', fn (): string => 'value1');
+    $manager->for('App\\Models\\User')->memo('key2', fn (): string => 'value2');
+    $manager->for('App\\Models\\User')->memo('key3', fn (): string => 'value3');
+
+    $entries = $manager->getMemoizedValues();
+    expect($entries)->toHaveCount(3);
+    expect($entries)->toHaveKey('App\\Models\\User::key1');
+    expect($entries)->toHaveKey('App\\Models\\User::key2');
+    expect($entries)->toHaveKey('App\\Models\\User::key3');
 });
