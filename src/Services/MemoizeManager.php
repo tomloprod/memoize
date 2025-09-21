@@ -307,12 +307,6 @@ final class MemoizeManager
         }
     }
 
-    // $unidadMedida = memoize()
-    // ->for(TipoUnidadMedida::class)
-    // ->skipIfNullKey()        // no ejecuta si key es null
-    // ->default(null)
-    // ->remember($this->unidad_medida_id, fn() => $this->unidadMedida);
-
     /**
      * Move an existing entry to the beginning of the list.
      */
