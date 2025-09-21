@@ -1,3 +1,9 @@
+<div align="center">
+
+# 🧠 Memoize
+
+**High-performance memoization library for PHP**
+
 <p align="center">
     <p align="center">
         <a href="https://github.com/tomloprod/memoize/actions"><img alt="GitHub Workflow Status (master)" src="https://github.com/tomloprod/memoize/actions/workflows/tests.yml/badge.svg"></a>
@@ -7,223 +13,247 @@
     </p>
 </p>
 
-------
-## 🚀 **About Memoize**
+---
 
-Memoize is a lightweight PHP library designed to implement memoization and function caching techniques with ease.
+</div>
 
-It allows you to optimize your application's performance by caching the results of expensive functions, avoiding repeated calculations when called with the same arguments.
+## 🎯 **About Memoize**
 
-Additionally, it provides specialized functionalities such as:
+**Memoize** is a lightweight PHP library designed to implement memoization and function caching techniques with ease.
 
-- **Key-based memoization** - Cache function results using custom keys for efficient retrieval
-- **Single execution functions** - Execute functions only once and reuse the result in subsequent calls  
-- **Simple and intuitive API** - Facade and helper function for easy integration
-- **Cache management** - Methods to check, remove, and clear cached values
 
-## **✨ Getting Started**
+Transform expensive function calls into lightning-fast cache lookups with zero configuration.
 
-### Basic memoization with memo()
+## ✨ **Features**
 
-You can memoize any callable function using the `memo()` method with a custom key. This will execute the callback only once and return the cached result on subsequent calls with the same key.
+<table>
+<tr>
+<td width="50%">
 
-```php
-// Using the helper function
-$result1 = memoize()->memo('expensive_calc', function () {
-    sleep(2); // Simulates expensive operation
-    return 42 * 1.5 + rand(1, 100);
-});
+🔑 **Key-based Memoization**  
+Cache function results with custom keys
 
-// Second call with same key: returns cached result (fast)
-$result2 = memoize()->memo('expensive_calc', function () {
-    sleep(2); // This won't execute
-    return 99999; // This value is ignored, cached value is returned
-});
+⚡ **Single Execution**  
+Functions run only once, results cached forever
 
-// $result1 === $result2 (same cached value)
+🏷️ **Namespaces**  
+Organize cache by classes or contexts
 
-// Different key: executes the function again
-$result3 = memoize()->memo('another_calc', function () {
-    return 'different calculation';
-});
+</td>
+<td width="50%">
+
+🧠 **LRU Cache**  
+Automatic memory management with size limits
+
+🎯 **Simple API**  
+Intuitive facade and helper functions
+
+📊 **Cache Analytics**  
+Built-in statistics and monitoring
+
+</td>
+</tr>
+</table>
+
+## 🚀 **Quick Start**
+
+### Installation
+
+```bash
+composer require tomloprod/memoize
 ```
 
-### Single execution with once()
+### Basic Usage
 
-For functions that should only be executed once regardless of how many times they are called, use the `once()` method.
+#### 🏷️ **Namespace Organization**
+
+If you want to get the most out of the package and better organize your memoization, we recommend using namespaces.
+
+When using namespaces, if you use a `$key` with a null value, the callback won’t be executed (*especially useful in certain cases*).
 
 ```php
-// Expensive initialization function
-$initializeDatabase = function () {
-    echo "Initializing database...\n";
-    sleep(3);
-    return "Connection established";
-};
+// Organize cache by context
+$userSettings = memoize()
+    ->for(UserSettings::class)
+    ->memo($userId, fn() => UserSettings::where('user_id', $userId)->first());
 
-// Create function that executes only once
-$memoizedInit = memoize()->once($initializeDatabase);
-
-// First call: executes the function
-$connection1 = $memoizedInit(); // "Initializing database..." + 3 seconds
-
-// Subsequent calls: return cached result
-$connection2 = $memoizedInit(); // Instant, no output
-$connection3 = $memoizedInit(); // Instant, no output
-
-// All variables contain the same value: "Connection established"
+$productCache = memoize()
+    ->for(Product::class)  
+    ->memo($productId, fn() => Product::with('variants')->find($productId));
 ```
 
-### Cache management
+#### 🔑 **Key-based Memoization**
 
-The library provides methods to manage the memoized values:
+You can also not use namespaces and just memoize keys.
 
 ```php
-// Check if a key exists
-if (memoize()->has('my_key')) {
-    echo "Value is cached";
-}
+// Expensive API call cached by key
+$weather = memoize()->memo(
+    'weather_london', 
+    fn() => Http::get('api.weather.com/london'->json()
+);
 
-// Remove a specific cached value
-$removed = memoize()->forget('my_key'); // Returns true if existed
+// Database query with dynamic key
+$user = memoize()->memo(
+    "user_{$id}", 
+    fn() => User::with('profile', 'orders')->find($id)
+);
+```
 
-// Get all cached keys
-$keys = memoize()->keys(); // Returns array of keys
+#### ⚡ **Single Execution Functions**
 
-// Clear all cached values
+```php
+// Initialize expensive resources only once
+$services = memoize()->once(fn() => [
+    'redis' => new Redis(),
+    'elasticsearch' => new Client(),
+    'logger' => new Logger(),
+]);
+
+$redis = $services()['redis']; // Initialized once
+$same = $services()['redis'];  // Same instance
+```
+
+
+
+#### 🧠 **Memory Management**
+
+The library uses an **LRU (Least Recently Used)** algorithm to automatically manage memory and prevent unlimited cache growth.
+
+**How does LRU work?**
+- Maintains a record of the access order for cache entries
+- When the maximum limit (`maxSize`) is reached, automatically removes the **least recently used** entry
+- Every time you access an entry (read or write), it moves to the front of the queue
+- Older entries remain at the end and are candidates for removal
+
+This ensures that the most relevant and frequently used data remains in memory, while obsolete data is automatically removed.
+
+```php
+// Set LRU cache limit (by default, there is no max size)
+memoize()->setMaxSize(1000);
+
+// Cache statistics
+$stats = memoize()->getStats();
+// ['size' => 150, 'maxSize' => 1000, 'head' => [...], 'tail' => [...]]
+
+// Clear specific or all cache
+memoize()->forget('user_123');
+memoize()->for('App\\Model\\User')->forget('123');
+
+// Or clear all cache
 memoize()->flush();
 ```
 
-### Practical use cases
+## 💡 **Advanced Examples**
 
-#### User data caching
-
-```php
-$getUserData = function ($userId) {
-    // Expensive database query or API call
-    return database()->query("SELECT * FROM users WHERE id = ?", [$userId]);
-};
-
-// Cache user data by ID
-$user = memoize()->memo("user_$userId", $getUserData);
-$sameUser = memoize()->memo("user_$userId", $getUserData); // From cache
-```
-
-#### Configuration loading
+### 🏃‍♂️ **Performance Optimization**
 
 ```php
-$loadConfig = function () {
-    $config = [];
-    foreach (glob('config/*.php') as $file) {
-        $config = array_merge($config, require $file);
-    }
-    return $config;
-};
-
-// Load configuration only once
-$config = memoize()->memo('app_config', $loadConfig);
-$configAgain = memoize()->memo('app_config', $loadConfig); // From cache
-```
-
-#### Expensive calculations
-
-```php
-// Complex calculation that takes time
-$complexCalculation = function ($data) {
-    sleep(5); // Simulate heavy processing
-    return array_sum(array_map(fn($x) => $x ** 2, $data));
-};
-
-$data = range(1, 1000);
-$result = memoize()->memo('calculation_' . md5(serialize($data)), function () use ($complexCalculation, $data) {
-    return $complexCalculation($data);
-});
-```
-
-#### One-time initialization
-
-```php
-// Initialize third-party services only once
-$initializeServices = memoize()->once(function () {
-    // Heavy initialization
-    return [
-        'logger' => new Logger(),
-        'cache' => new CacheManager(),
-        'mailer' => new MailService()
-    ];
-});
-
-$services = $initializeServices(); // Initializes
-$sameServices = $initializeServices(); // From cache
-```
-
-### Performance and optimization
-
-Memoization is especially useful for:
-
-- **Expensive database queries** - Cache results for repeated queries
-- **API calls** - Reduce HTTP requests for the same data
-- **File processing** - Cache parsing or transformation results
-- **Complex calculations** - CPU-intensive operations
-- **Configuration loading** - Load settings once per request
-
-#### Performance example
-
-```php
-// Without memoization - executes every time
-$start = microtime(true);
-for ($i = 0; $i < 100; $i++) {
-    $result = expensiveFunction(); // Takes 100ms each
+// Fibonacci with memoization - O(n) instead of O(2^n)
+function fibonacci(int $n): int {
+    return memoize()->memo(
+        "fib_{$n}", 
+        fn() => $n <= 1 ? $n : fibonacci($n - 1) + fibonacci($n - 2)
+    );
 }
-$timeWithoutMemo = microtime(true) - $start; // ~10 seconds
 
-// With memoization - executes only once
-$start = microtime(true);
-for ($i = 0; $i < 100; $i++) {
-    $result = memoize()->memo('expensive_key', fn() => expensiveFunction());
-}
-$timeWithMemo = microtime(true) - $start; // ~100ms
-
-echo "Improvement: " . round($timeWithoutMemo / $timeWithMemo) . "x faster";
+// Complex data aggregation
+$salesReport = memoize()->memo(
+    "sales_report_{$month}", 
+    fn() => Order::whereMonth('created_at', $month)
+        ->with('items.product')
+        ->get()
+        ->groupBy('status')
+        ->map(fn($orders) => $orders->sum('total'))
+);
 ```
 
-### Ways of using Memoize
+## 📖 **API Reference**
 
-You can use Memoize either with the helper function `memoize()`:
+### Core Methods
+
+<table>
+<tr><td width="30%"><strong>Method</strong></td><td><strong>Description</strong></td></tr>
+<tr><td>
 
 ```php
-// Using the helper function
-$result = memoize()->memo('key', $callback);
-$onceFunction = memoize()->once($callback);
-memoize()->flush();
+memo(?string $key, callable $callback)
 ```
 
-or by directly invoking the static methods of the `Memoize` facade:
+</td><td>
+
+**Key-based memoization** - Execute callback and cache result by key. Returns cached value on subsequent calls.
+
+</td></tr>
+<tr><td>
+
+```php  
+once(callable $callback)
+```
+
+</td><td>
+
+**Single execution** - Returns a wrapper function that executes the callback only once, caching the result forever.
+
+</td></tr>
+<tr><td>
 
 ```php
-use Tomloprod\Memoize\Support\Facades\Memoize;
-
-// Using the facade
-$result = Memoize::memo('key', $callback);
-$onceFunction = Memoize::once($callback);
-Memoize::flush();
+for(string $class)
 ```
 
-### Available Methods
+</td><td>
 
-| Method | Description |
-|--------|-------------|
-| `memo(string $key, callable $callback)` | Execute callback and cache result by key |
-| `once(callable $callback)` | Return function that executes only once |
-| `has(string $key)` | Check if key exists in cache |
-| `forget(string $key)` | Remove specific key from cache |
-| `keys()` | Get array of all cached keys |
-| `flush()` | Clear all cached values |
+**Namespace organization** - Set namespace to organize cache by class/context. Automatically cleared after use.
 
-## **🚀 Installation & Requirements**
+</td></tr>
+</table>
 
-> **Requires [PHP 8.2+](https://php.net/releases/)**
+### Cache Management
 
-You may use [Composer](https://getcomposer.org) to install Memoize into your PHP project:
+<table>
+<tr><td width="30%"><strong>Method</strong></td><td><strong>Description</strong></td></tr>
+<tr><td>
+
+```php
+has(string $key): bool
+```
+
+</td><td>Check if a key exists in cache</td></tr>
+<tr><td>
+
+```php
+forget(string $key): bool  
+```
+
+</td><td>Remove specific key from cache</td></tr>
+<tr><td>
+
+```php
+flush(): void
+```
+
+</td><td>Clear all cached values</td></tr>
+<tr><td>
+
+```php
+setMaxSize(?int $maxSize): void
+```
+
+</td><td>Set maximum entries (LRU eviction)</td></tr>
+<tr><td>
+
+```php
+getStats(): array
+```
+
+</td><td>Get detailed cache statistics</td></tr>
+</table>
+
+## ⚙️ **Requirements & Installation**
+
+- **PHP 8.2+**
+- **Composer**
 
 ```bash
 composer require tomloprod/memoize
