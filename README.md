@@ -176,9 +176,7 @@ $salesReport = memoize()->memo(
 <tr><td width="30%"><strong>Method</strong></td><td><strong>Description</strong></td></tr>
 <tr><td>
 
-```php
-memo(?string $key, callable $callback)
-```
+**memo(?string $key, callable $callback)**
 
 </td><td>
 
@@ -187,9 +185,7 @@ memo(?string $key, callable $callback)
 </td></tr>
 <tr><td>
 
-```php  
-once(callable $callback)
-```
+**once(callable $callback)**
 
 </td><td>
 
@@ -198,9 +194,7 @@ once(callable $callback)
 </td></tr>
 <tr><td>
 
-```php
-for(string $class)
-```
+**for(string $class)**
 
 </td><td>
 
@@ -215,37 +209,27 @@ for(string $class)
 <tr><td width="30%"><strong>Method</strong></td><td><strong>Description</strong></td></tr>
 <tr><td>
 
-```php
-has(string $key): bool
-```
+**has(string $key): bool**
 
 </td><td>Check if a key exists in cache</td></tr>
 <tr><td>
 
-```php
-forget(string $key): bool  
-```
+**forget(string $key): bool**
 
 </td><td>Remove specific key from cache</td></tr>
 <tr><td>
 
-```php
-flush(): void
-```
+**flush(): void**
 
 </td><td>Clear all cached values</td></tr>
 <tr><td>
 
-```php
-setMaxSize(?int $maxSize): void
-```
+**setMaxSize(?int $maxSize): void**
 
 </td><td>Set maximum entries (LRU eviction)</td></tr>
 <tr><td>
 
-```php
-getStats(): array
-```
+**getStats(): array**
 
 </td><td>Get detailed cache statistics</td></tr>
 </table>
