@@ -6,9 +6,12 @@ namespace Tomloprod\Memoize\Services;
 
 use Exception;
 use InvalidArgumentException;
+use Tomloprod\Memoize\Concerns\HasFlags;
 
 final class MemoizeManager
 {
+    use HasFlags;
+
     private static MemoizeManager $instance;
 
     /** @var array<string, MemoEntry> */

@@ -45,11 +45,11 @@ Organize cache by classes or contexts
 🧠 **LRU Cache**  
 Automatic memory management with size limits
 
-🎯 **Simple API**  
-Intuitive facade and helper functions
-
 📊 **Cache Analytics**  
 Built-in statistics and monitoring
+
+🏃 **Runtime Flags**  
+Dynamic behavior control during execution
 
 </td>
 </tr>
@@ -143,6 +143,116 @@ memoize()->for('App\\Model\\User')->forget('123');
 // Or clear all cache
 memoize()->flush();
 ```
+
+#### 🏃 **Runtime Flags**
+
+Control memoization behavior dynamically during execution with runtime flags. These flags exist only in memory and reset between requests/processes.
+
+**How do runtime flags work?**
+- Flags are stored in memory during the current execution
+- They allow conditional behavior without external configuration
+- Perfect for debug modes, logging control, and dynamic optimizations
+- Automatically cleared when the process ends
+
+```php
+// Skip cache during testing
+memoize()->enableFlag('bypass_cache');
+
+$userData = memoize()->memo("user_{$id}", function() use ($id) {
+    if (memoize()->hasFlag('bypass_cache')) {
+        return User::fresh()->find($id); // Always fetch from DB in tests
+    }
+    return User::find($id);
+});
+
+
+// Feature toggles without external dependencies
+memoize()->enableFlag('new_algorithm');
+
+$result = memoize()->memo($cacheKey, function() {
+    if (memoize()->hasFlag('new_algorithm')) {
+        return $this->calculateWithNewAlgorithm();
+    }
+    return $this->calculateWithOldAlgorithm();
+});
+
+// Development vs Production behavior
+if (app()->environment('local') && memoize()->hasFlag('dev_mode')) {
+    memoize()->enableFlags(['verbose_logging', 'bypass_cache']);
+}
+
+// Model boot method with conditional service calls
+class Product extends Model
+{
+    protected static function boot()
+    {
+        parent::boot();
+        
+        static::updated(function ($product) {
+            // Only call external stock service if flag is not set
+            if (! memoize()->hasFlag('disableStockService')) {
+                app(StockService::class)->updateInventory($product);
+            }
+        });
+    }
+}
+```
+
+**Runtime Flag Methods:**
+
+<table>
+<tr><td width="40%"><strong>Method</strong></td><td><strong>Description</strong></td></tr>
+<tr><td>
+
+**enableFlag(string $flag)**
+
+</td><td>Enable a specific runtime flag</td></tr>
+<tr><td>
+
+**disableFlag(string $flag)**
+
+</td><td>Disable a specific runtime flag</td></tr>
+<tr><td>
+
+**toggleFlag(string $flag)**
+
+</td><td>Toggle flag state (enabled/disabled)</td></tr>
+<tr><td>
+
+**hasFlag(string $flag): bool**
+
+</td><td>Check if a specific flag is enabled</td></tr>
+<tr><td>
+
+**enableFlags(array $flags)**
+
+</td><td>Enable multiple flags at once</td></tr>
+<tr><td>
+
+**disableFlags(array $flags)**
+
+</td><td>Disable multiple flags at once</td></tr>
+<tr><td>
+
+**hasAnyFlag(array $flags): bool**
+
+</td><td>Check if at least one flag is enabled</td></tr>
+<tr><td>
+
+**hasAllFlags(array $flags): bool**
+
+</td><td>Check if all specified flags are enabled</td></tr>
+<tr><td>
+
+**getFlags(): array**
+
+</td><td>Get all currently enabled flags</td></tr>
+<tr><td>
+
+**clearFlags()**
+
+</td><td>Clear all enabled flags</td></tr>
+</table>
 
 ## 💡 **Advanced Examples**
 
