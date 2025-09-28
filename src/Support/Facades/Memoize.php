@@ -18,6 +18,16 @@ use Tomloprod\Memoize\Services\MemoizeManager;
  * @method static ?int getMaxSize()
  * @method static array getStats()
  * @method static self for(string $class)
+ * @method static self enableFlag(string $flag)
+ * @method static self disableFlag(string $flag)
+ * @method static self toggleFlag(string $flag)
+ * @method static bool hasFlag(string $flag)
+ * @method static array<string, bool> getFlags()
+ * @method static self enableFlags(array $flags)
+ * @method static self disableFlags(array $flags)
+ * @method static self clearFlags()
+ * @method static bool hasAnyFlag(array $flags)
+ * @method static bool hasAllFlags(array $flags)
  */
 final class Memoize
 {
