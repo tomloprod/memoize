@@ -8,10 +8,10 @@ use Tomloprod\Memoize\Services\MemoEntry;
 use Tomloprod\Memoize\Services\MemoizeManager;
 
 /**
- * @method static mixed memo(?string $key, callable $callback)
- * @method static bool forget(string $key)
+ * @method static mixed memo(string|int|float|null $key, callable $callback)
+ * @method static bool forget(string|int|float $key)
  * @method static void flush()
- * @method static bool has(string $key)
+ * @method static bool has(string|int|float $key)
  * @method static array<string, MemoEntry> getMemoizedValues()
  * @method static callable once(callable $fn)
  * @method static void setMaxSize(?int $maxSize)
