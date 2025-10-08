@@ -63,22 +63,25 @@ final class MemoizeManager
      * This prevents repeated cache hits within the same execution, significantly
      * improving performance.
      *
-     * @param  string|null  $key  Cache key (null returns null when namespace is set)
+     * @param  string|int|float|null  $key  Cache key (null returns null when namespace is set)
      * @param  callable  $callback  Function to execute if value is not memoized
      */
-    public function memo(?string $key, callable $callback): mixed
+    public function memo(string|int|float|null $key, callable $callback): mixed
     {
         // Handle null key with namespace: return null without executing callback
-        if ($key === null && $this->namespace !== null) {
+        if (($key === null || $key === '') && $this->namespace !== null) {
             $this->namespace = null;
 
             return null;
         }
 
         // Handle null key without namespace: throw exception (backward compatibility)
-        if ($key === null) {
+        if ($key === null || $key === '') {
             throw new InvalidArgumentException('Key cannot be null when no namespace is set');
         }
+
+        // Convert key to string for consistent handling
+        $key = (string) $key;
 
         // Build namespaced key if namespace is set
         $namespacedKey = $this->buildNamespacedKey($this->namespace, $key);
@@ -117,12 +120,12 @@ final class MemoizeManager
     /**
      * Remove a specific memoized value by key.
      *
-     * @param  string  $key  Cache key to remove
+     * @param  string|int|float  $key  Cache key to remove
      * @return bool True if the key existed and was removed, false otherwise
      */
-    public function forget(string $key): bool
+    public function forget(string|int|float $key): bool
     {
-        $namespacedKey = $this->buildNamespacedKey($this->namespace, $key);
+        $namespacedKey = $this->buildNamespacedKey($this->namespace, (string) $key);
 
         if (array_key_exists($namespacedKey, $this->memoizedValues)) {
 
@@ -156,12 +159,12 @@ final class MemoizeManager
     /**
      * Check if a key exists in the memoized cache.
      *
-     * @param  string  $key  Cache key to check
+     * @param  string|int|float  $key  Cache key to check
      * @return bool True if the key exists, false otherwise
      */
-    public function has(string $key): bool
+    public function has(string|int|float $key): bool
     {
-        $namespacedKey = $this->buildNamespacedKey($this->namespace, $key);
+        $namespacedKey = $this->buildNamespacedKey($this->namespace, (string) $key);
 
         $result = array_key_exists($namespacedKey, $this->memoizedValues);
 

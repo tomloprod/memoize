@@ -90,7 +90,7 @@ You can also not use namespaces and just memoize keys.
 // Expensive API call cached by key
 $weather = memoize()->memo(
     'weather_london', 
-    fn() => Http::get('api.weather.com/london'->json()
+    fn() => Http::get('api.weather.com/london')->json()
 );
 
 // Database query with dynamic key
@@ -176,7 +176,7 @@ $salesReport = memoize()->memo(
 <tr><td width="30%"><strong>Method</strong></td><td><strong>Description</strong></td></tr>
 <tr><td>
 
-**memo(?string $key, callable $callback)**
+**memo(string|int|float|null $key, callable $callback)**
 
 </td><td>
 
@@ -209,12 +209,12 @@ $salesReport = memoize()->memo(
 <tr><td width="30%"><strong>Method</strong></td><td><strong>Description</strong></td></tr>
 <tr><td>
 
-**has(string $key): bool**
+**has(string|int|float $key): bool**
 
 </td><td>Check if a key exists in cache</td></tr>
 <tr><td>
 
-**forget(string $key): bool**
+**forget(string|int|float $key): bool**
 
 </td><td>Remove specific key from cache</td></tr>
 <tr><td>

@@ -775,3 +775,95 @@ test('each operation requires explicit namespace', function (): void {
     expect($entries)->toHaveKey('App\\Models\\User::key2');
     expect($entries)->toHaveKey('App\\Models\\User::key3');
 });
+
+test('memo works with integer keys', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $callCount = 0;
+    $callback = function () use (&$callCount): string {
+        $callCount++;
+
+        return 'result_'.$callCount;
+    };
+
+    // Test with positive integer
+    $result1 = $manager->memo(123, $callback);
+    expect($result1)->toBe('result_1');
+    expect($callCount)->toBe(1);
+
+    // Should return memoized value
+    $result2 = $manager->memo(123, $callback);
+    expect($result2)->toBe('result_1');
+    expect($callCount)->toBe(1);
+
+    // Test with negative integer
+    $result3 = $manager->memo(-456, $callback);
+    expect($result3)->toBe('result_2');
+    expect($callCount)->toBe(2);
+
+    // Verify keys are stored as strings
+    $entries = $manager->getMemoizedValues();
+    expect($entries)->toHaveKey('123');
+    expect($entries)->toHaveKey('-456');
+});
+
+test('memo works with float keys', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $callCount = 0;
+    $callback = function () use (&$callCount): string {
+        $callCount++;
+
+        return 'result_'.$callCount;
+    };
+
+    // Test with positive float
+    $result1 = $manager->memo(12.34, $callback);
+    expect($result1)->toBe('result_1');
+    expect($callCount)->toBe(1);
+
+    // Should return memoized value
+    $result2 = $manager->memo(12.34, $callback);
+    expect($result2)->toBe('result_1');
+    expect($callCount)->toBe(1);
+
+    // Verify keys are stored as strings
+    $entries = $manager->getMemoizedValues();
+    expect($entries)->toHaveKey('12.34');
+});
+
+test('different types with same string representation share same cache entry', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    // These should be the same entry since both convert to '123'
+    $manager->memo(123, fn (): string => 'integer_value');
+    $manager->memo('123', fn (): string => 'string_value');
+
+    // Should be only 1 entry since both convert to '123'
+    expect($manager->getMemoizedValues())->toHaveCount(1);
+    expect($manager->memo(123, fn (): string => 'should_not_execute'))->toBe('integer_value');
+    expect($manager->memo('123', fn (): string => 'should_not_execute'))->toBe('integer_value');
+});
+
+test('forget and has work with numeric keys', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $manager->memo(123, fn (): string => 'int_value');
+    $manager->memo(45.67, fn (): string => 'float_value');
+
+    expect($manager->has(123))->toBe(true);
+    expect($manager->has(45.67))->toBe(true);
+    expect($manager->has('123'))->toBe(true); // Same as int 123
+    expect($manager->has('45.67'))->toBe(true); // Same as float 45.67
+
+    expect($manager->forget(123))->toBe(true);
+    expect($manager->has(123))->toBe(false);
+    expect($manager->has('123'))->toBe(false); // Also false since it's the same key
+
+    expect($manager->forget(45.67))->toBe(true);
+    expect($manager->has(45.67))->toBe(false);
+});
