@@ -51,6 +51,9 @@ Built-in statistics and monitoring
 🏃 **Runtime Flags**  
 Dynamic behavior control during execution
 
+🔄 **Enable/Disable**  
+Temporarily disable memoization when needed
+
 </td>
 </tr>
 </table>
@@ -143,6 +146,36 @@ memoize()->for('App\\Model\\User')->forget('123');
 // Or clear all cache
 memoize()->flush();
 ```
+
+#### 🔄 **Enable/Disable Memoization**
+
+You can temporarily disable memoization to bypass caching when needed. When disabled, callbacks are executed every time without storing results in cache.
+
+```php
+// Disable memoization
+memoize()->disable();
+
+// Now all memo() calls will execute callbacks without caching
+$result1 = memoize()->memo('key', fn() => expensiveOperation()); // Executes
+$result2 = memoize()->memo('key', fn() => expensiveOperation()); // Executes again
+
+// Re-enable memoization
+memoize()->enable();
+
+// Now caching works normally again
+$result3 = memoize()->memo('key', fn() => expensiveOperation()); // Executes and caches
+$result4 = memoize()->memo('key', fn() => expensiveOperation()); // Returns cached value
+
+// Check current state
+if (memoize()->isEnabled()) {
+    // Memoization is active
+}
+```
+
+**Use cases:**
+- Debugging: Temporarily disable caching to see fresh data
+- Testing: Ensure callbacks execute every time during tests
+- Conditional behavior: Disable caching based on environment or conditions
 
 #### 🏃 **Runtime Flags**
 
@@ -342,6 +375,21 @@ $salesReport = memoize()->memo(
 **getStats(): array**
 
 </td><td>Get detailed cache statistics</td></tr>
+<tr><td>
+
+**disable(): void**
+
+</td><td>Disable memoization (callbacks execute without caching)</td></tr>
+<tr><td>
+
+**enable(): void**
+
+</td><td>Enable memoization (default state)</td></tr>
+<tr><td>
+
+**isEnabled(): bool**
+
+</td><td>Check if memoization is currently enabled</td></tr>
 </table>
 
 ## ⚙️ **Requirements & Installation**
