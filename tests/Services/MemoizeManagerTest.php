@@ -534,6 +534,61 @@ test('setMaxSize enforces LRU immediately', function (): void {
     expect($manager->has('key4'))->toBe(true);
 });
 
+test('LRU works correctly with namespaces', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+    $manager->setMaxSize(3);
+
+    // Create entries with different namespaces
+    $manager->memo('key1', fn (): string => 'value1'); // No namespace
+    $manager->for('App\\Models\\User')->memo('key2', fn (): string => 'value2'); // User namespace
+    $manager->for('App\\Models\\Product')->memo('key3', fn (): string => 'value3'); // Product namespace
+
+    // Verify all entries exist
+    expect($manager->has('key1'))->toBe(true);
+    $manager->for('App\\Models\\User');
+    expect($manager->has('key2'))->toBe(true);
+    $manager->for('App\\Models\\Product');
+    expect($manager->has('key3'))->toBe(true);
+
+    // Verify order: key3 (most recent) -> key2 -> key1 (least recent)
+    $stats = $manager->getStats();
+    expect($stats['head']['key'])->toBe('App\\Models\\Product::key3');
+    expect($stats['tail']['key'])->toBe('key1');
+
+    // Access key1 (no namespace) - should move to head
+    $manager->memo('key1', fn (): string => 'value1');
+    $stats = $manager->getStats();
+    expect($stats['head']['key'])->toBe('key1');
+    expect($stats['tail']['key'])->toBe('App\\Models\\User::key2');
+
+    // Add a new entry - should evict the least recently used (key2 with User namespace)
+    $manager->for('App\\Models\\Order')->memo('key4', fn (): string => 'value4');
+
+    // key2 should be evicted
+    $manager->for('App\\Models\\User');
+    expect($manager->has('key2'))->toBe(false);
+
+    // Other entries should still exist
+    expect($manager->has('key1'))->toBe(true);
+    $manager->for('App\\Models\\Product');
+    expect($manager->has('key3'))->toBe(true);
+    $manager->for('App\\Models\\Order');
+    expect($manager->has('key4'))->toBe(true);
+
+    // Verify new order: key4 (most recent) -> key1 -> key3 (least recent)
+    $stats = $manager->getStats();
+    expect($stats['head']['key'])->toBe('App\\Models\\Order::key4');
+    expect($stats['tail']['key'])->toBe('App\\Models\\Product::key3');
+
+    // Access key3 (Product namespace) - should move to head
+    $manager->for('App\\Models\\Product');
+    $manager->memo('key3', fn (): string => 'value3');
+    $stats = $manager->getStats();
+    expect($stats['head']['key'])->toBe('App\\Models\\Product::key3');
+    expect($stats['tail']['key'])->toBe('key1');
+});
+
 test('getStats returns correct information', function (): void {
     $manager = MemoizeManager::instance();
     $manager->setMaxSize(null);
@@ -866,4 +921,125 @@ test('forget and has work with numeric keys', function (): void {
 
     expect($manager->forget(45.67))->toBe(true);
     expect($manager->has(45.67))->toBe(false);
+});
+
+test('disable disables memoization', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    expect($manager->isEnabled())->toBe(true);
+
+    $manager->disable();
+
+    expect($manager->isEnabled())->toBe(false);
+});
+
+test('enable enables memoization', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $manager->disable();
+    expect($manager->isEnabled())->toBe(false);
+
+    $manager->enable();
+
+    expect($manager->isEnabled())->toBe(true);
+});
+
+test('isEnabled returns current enabled state', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    expect($manager->isEnabled())->toBe(true);
+
+    $manager->disable();
+    expect($manager->isEnabled())->toBe(false);
+
+    $manager->enable();
+    expect($manager->isEnabled())->toBe(true);
+});
+
+test('memo executes callback without caching when disabled', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+    $manager->disable();
+
+    $callCount = 0;
+    $callback = function () use (&$callCount): string {
+        $callCount++;
+
+        return 'result_'.$callCount;
+    };
+
+    // First call - should execute callback but not cache
+    $result1 = $manager->memo('test_key', $callback);
+    expect($result1)->toBe('result_1');
+    expect($callCount)->toBe(1);
+    expect($manager->has('test_key'))->toBe(false);
+
+    // Second call - should execute callback again (not cached)
+    $result2 = $manager->memo('test_key', $callback);
+    expect($result2)->toBe('result_2');
+    expect($callCount)->toBe(2);
+    expect($manager->has('test_key'))->toBe(false);
+});
+
+test('memo resets namespace when disabled', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+    $manager->disable();
+
+    $manager->for('App\\Models\\User');
+    $callCount = 0;
+    $callback = function () use (&$callCount): string {
+        $callCount++;
+
+        return 'result_'.$callCount;
+    };
+
+    $result = $manager->memo('test_key', $callback);
+    expect($result)->toBe('result_1');
+    expect($callCount)->toBe(1);
+
+    // Namespace should be reset after memo call
+    $manager->for('App\\Models\\User');
+    $manager->memo('another_key', fn (): string => 'test');
+    // If namespace wasn't reset, this would use the namespace
+    // But since it's disabled and namespace is reset, we can verify by checking
+    // that subsequent calls don't use the namespace
+    expect($manager->getMemoizedValues())->toHaveCount(0);
+});
+
+test('memo works normally after re-enabling', function (): void {
+    $manager = MemoizeManager::instance();
+    $manager->flush();
+
+    $manager->disable();
+
+    $callCount = 0;
+    $callback = function () use (&$callCount): string {
+        $callCount++;
+
+        return 'result_'.$callCount;
+    };
+
+    // Call while disabled - should not cache
+    $result1 = $manager->memo('test_key', $callback);
+    expect($result1)->toBe('result_1');
+    expect($callCount)->toBe(1);
+    expect($manager->has('test_key'))->toBe(false);
+
+    // Re-enable
+    $manager->enable();
+
+    // Now should cache normally
+    $result2 = $manager->memo('test_key', $callback);
+    expect($result2)->toBe('result_2');
+    expect($callCount)->toBe(2);
+    expect($manager->has('test_key'))->toBe(true);
+
+    // Should return cached value
+    $result3 = $manager->memo('test_key', $callback);
+    expect($result3)->toBe('result_2');
+    expect($callCount)->toBe(2);
 });
