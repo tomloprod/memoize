@@ -28,6 +28,9 @@ use Tomloprod\Memoize\Services\MemoizeManager;
  * @method static self clearFlags()
  * @method static bool hasAnyFlag(array $flags)
  * @method static bool hasAllFlags(array $flags)
+ * @method static void disable()
+ * @method static void enable()
+ * @method static bool isEnabled()
  */
 final class Memoize
 {

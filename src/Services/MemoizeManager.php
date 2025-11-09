@@ -25,6 +25,8 @@ final class MemoizeManager
 
     private ?string $namespace = null;
 
+    private bool $enabled = true;
+
     private function __construct() {}
 
     public function __clone()
@@ -81,6 +83,13 @@ final class MemoizeManager
         // Handle null key without namespace: throw exception (backward compatibility)
         if ($key === null || $key === '') {
             throw new InvalidArgumentException('Key cannot be null when no namespace is set');
+        }
+
+        // If memoize is disabled, just execute the callback without caching
+        if (! $this->enabled) {
+            $this->namespace = null;
+
+            return $callback();
         }
 
         // Convert key to string for consistent handling
@@ -228,6 +237,30 @@ final class MemoizeManager
     }
 
     /**
+     * Disable memoization.
+     */
+    public function disable(): void
+    {
+        $this->enabled = false;
+    }
+
+    /**
+     * Enable memoization.
+     */
+    public function enable(): void
+    {
+        $this->enabled = true;
+    }
+
+    /**
+     * Check if memoization is currently enabled.
+     */
+    public function isEnabled(): bool
+    {
+        return $this->enabled;
+    }
+
+    /**
      * Get stats of the cache.
      *
      * @return array{
@@ -349,7 +382,9 @@ final class MemoizeManager
 
         $lastEntry = $this->tail;
 
-        unset($this->memoizedValues[$lastEntry->getKey()]);
+        $namespacedKey = $this->buildNamespacedKey($lastEntry->getNamespace(), $lastEntry->getKey());
+
+        unset($this->memoizedValues[$namespacedKey]);
 
         $this->removeFromList($lastEntry);
     }
