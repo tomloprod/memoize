@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🧠 Memoize
+# 🧠 Memoize - PHP Memoization Library
 
-**High-performance memoization library for PHP**
+**High-performance memoization and function caching library for PHP**
 
 <p align="center">
     <p align="center">
@@ -58,7 +58,7 @@ Temporarily disable memoization when needed
 </tr>
 </table>
 
-## 🚀 **Quick Start**
+## 🚀 **Quick Start - PHP Memoization**
 
 ### Installation
 
